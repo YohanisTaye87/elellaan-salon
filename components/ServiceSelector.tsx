@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Category, Service } from "@/lib/types";
 import { formatBirr, formatPriceRange } from "@/lib/format";
+import { isPhoneValid } from "@/lib/normalize";
 import CheckIcon from "./CheckIcon";
 import HistorySheet from "./HistorySheet";
 
@@ -19,9 +20,11 @@ export default function ServiceSelector({ categories, services }: Props) {
   // service id -> quantity (1..9). Absent = not selected.
   const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
   const [customerName, setCustomerName] = useState("");
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touchedName, setTouchedName] = useState(false);
+  const [touchedPhone, setTouchedPhone] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeCat, setActiveCat] = useState<string>(categories[0]?.id ?? "");
 
@@ -65,7 +68,9 @@ export default function ServiceSelector({ categories, services }: Props) {
 
   const trimmedName = customerName.trim();
   const nameValid = trimmedName.length >= 2;
-  const canSubmit = selectedItems.length > 0 && nameValid && !submitting;
+  const phoneValid = isPhoneValid(phone);
+  const canSubmit =
+    selectedItems.length > 0 && nameValid && phoneValid && !submitting;
 
   // Measure the sticky bottom panel so the page content always clears it.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -98,6 +103,7 @@ export default function ServiceSelector({ categories, services }: Props) {
   async function submit() {
     if (!canSubmit) {
       if (!nameValid) setTouchedName(true);
+      if (!phoneValid) setTouchedPhone(true);
       return;
     }
     setSubmitting(true);
@@ -108,6 +114,7 @@ export default function ServiceSelector({ categories, services }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer_name: trimmedName,
+          phone: phone.trim(),
           items: selectedItems.map((x) => ({
             service_id: x.service.id,
             quantity: x.qty,
@@ -249,27 +256,53 @@ export default function ServiceSelector({ categories, services }: Props) {
               </div>
             )}
 
-            <div className="mb-3">
-              <input
-                className={`input ${
-                  touchedName && !nameValid
-                    ? "border-red-300 focus:ring-red-200 focus:border-red-300"
-                    : ""
-                }`}
-                placeholder="Your name"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                onBlur={() => setTouchedName(true)}
-                maxLength={60}
-                aria-invalid={touchedName && !nameValid}
-                aria-required="true"
-                autoComplete="name"
-              />
-              {touchedName && !nameValid && (
-                <p className="mt-1 ml-1 text-xs text-red-600 animate-fade-up">
-                  Please enter your name (at least 2 letters).
-                </p>
-              )}
+            <div className="mb-3 grid gap-2">
+              <div>
+                <input
+                  className={`input ${
+                    touchedName && !nameValid
+                      ? "border-red-300 focus:ring-red-200 focus:border-red-300"
+                      : ""
+                  }`}
+                  placeholder="Your name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  onBlur={() => setTouchedName(true)}
+                  maxLength={60}
+                  aria-invalid={touchedName && !nameValid}
+                  aria-required="true"
+                  autoComplete="name"
+                />
+                {touchedName && !nameValid && (
+                  <p className="mt-1 ml-1 text-xs text-red-600 animate-fade-up">
+                    Please enter your name (at least 2 letters).
+                  </p>
+                )}
+              </div>
+              <div>
+                <input
+                  className={`input ${
+                    touchedPhone && !phoneValid
+                      ? "border-red-300 focus:ring-red-200 focus:border-red-300"
+                      : ""
+                  }`}
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="Phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={() => setTouchedPhone(true)}
+                  maxLength={20}
+                  aria-invalid={touchedPhone && !phoneValid}
+                  aria-required="true"
+                  autoComplete="tel"
+                />
+                {touchedPhone && !phoneValid && (
+                  <p className="mt-1 ml-1 text-xs text-red-600 animate-fade-up">
+                    Please enter a valid phone number.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-3">

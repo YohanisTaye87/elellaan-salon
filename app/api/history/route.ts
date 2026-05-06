@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     // We also normalize stored values at insert time, so they line up.
     const { data, error } = await supabase
       .from("orders")
-      .select("id, created_at, customer_name, total, order_items(id,service_name,category_name,price)")
+      .select("id, created_at, customer_name, phone, comment, total, order_items(id,service_name,category_name,price)")
       .ilike("customer_name", displayName)
       .order("created_at", { ascending: false })
       .limit(20);

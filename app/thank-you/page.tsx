@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServerClient } from "@/lib/supabase";
 import HeaderLogo from "@/components/HeaderLogo";
+import CommentForm from "@/components/CommentForm";
 import { formatBirr } from "@/lib/format";
 
 export const revalidate = 0;
@@ -99,6 +100,13 @@ export default async function ThankYou({ searchParams }: Props) {
               your details there.
             </p>
           </div>
+        )}
+
+        {data && (
+          <CommentForm
+            orderId={data.order.id}
+            initial={data.order.comment ?? null}
+          />
         )}
 
         <Link href="/" className="btn-ghost mt-8">

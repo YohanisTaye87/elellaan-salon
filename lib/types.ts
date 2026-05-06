@@ -19,6 +19,8 @@ export type Order = {
   id: string;
   created_at: string;
   customer_name: string | null;
+  phone: string | null;
+  comment: string | null;
   total: number;
 };
 

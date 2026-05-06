@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatBirr } from "@/lib/format";
 
 type HistoryOrder = {
   id: string;
   created_at: string;
   customer_name: string | null;
+  phone: string | null;
+  comment: string | null;
   total: number;
   order_items: {
     id: string;
@@ -182,32 +183,24 @@ export default function HistorySheet({ open, onClose, prefillName }: Props) {
                 <ul className="space-y-3 mt-4">
                   {orders.map((o) => (
                     <li key={o.id} className="card p-4 animate-fade-up">
-                      <div className="flex justify-between items-baseline mb-2">
-                        <div className="text-xs text-ink-muted">
-                          {formatDate(o.created_at)}
-                        </div>
-                        <div className="text-lg font-semibold tabular-nums text-brand-700">
-                          {formatBirr(o.total)}
-                        </div>
+                      <div className="text-xs text-ink-muted mb-2">
+                        {formatDate(o.created_at)}
                       </div>
                       <ul className="divide-y divide-brand-100">
                         {o.order_items.map((it) => (
-                          <li
-                            key={it.id}
-                            className="flex justify-between py-1.5 text-sm"
-                          >
-                            <span className="pr-2">
-                              <span className="text-ink">{it.service_name}</span>{" "}
-                              <span className="text-ink-muted text-xs">
-                                · {it.category_name}
-                              </span>
-                            </span>
-                            <span className="tabular-nums text-ink">
-                              {formatBirr(it.price)}
+                          <li key={it.id} className="py-1.5 text-sm">
+                            <span className="text-ink">{it.service_name}</span>{" "}
+                            <span className="text-ink-muted text-xs">
+                              · {it.category_name}
                             </span>
                           </li>
                         ))}
                       </ul>
+                      {o.comment && (
+                        <p className="mt-2 text-xs italic text-ink-muted whitespace-pre-line">
+                          “{o.comment}”
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -221,21 +214,29 @@ export default function HistorySheet({ open, onClose, prefillName }: Props) {
 }
 
 function Summary({ orders }: { orders: HistoryOrder[] }) {
-  const total = orders.reduce((s, o) => s + o.total, 0);
+  const lastVisit = orders[0]?.created_at;
   return (
     <div className="grid grid-cols-2 gap-3 animate-fade-up">
       <div className="card p-3 text-center">
         <div className="text-[11px] uppercase tracking-wider text-ink-muted">
           Visits
         </div>
-        <div className="text-2xl font-semibold tabular-nums">{orders.length}</div>
+        <div className="text-2xl font-semibold tabular-nums">
+          {orders.length}
+        </div>
       </div>
       <div className="card p-3 text-center">
         <div className="text-[11px] uppercase tracking-wider text-ink-muted">
-          Total spent
+          Last visit
         </div>
-        <div className="text-2xl font-semibold tabular-nums text-brand-700">
-          {formatBirr(total)}
+        <div className="text-sm font-semibold text-brand-700 mt-1">
+          {lastVisit
+            ? new Date(lastVisit).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+            : "—"}
         </div>
       </div>
     </div>

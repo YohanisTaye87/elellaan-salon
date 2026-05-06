@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase";
 import { isAdminRequest } from "@/lib/auth";
-import { normalizeCustomerName } from "@/lib/normalize";
+import { normalizeCustomerName, normalizePhone } from "@/lib/normalize";
 
 export const dynamic = "force-dynamic";
 
@@ -114,9 +114,19 @@ export async function POST(req: NextRequest) {
         ).displayName || null
       : null;
 
+  const rawPhone = (body as { phone?: unknown }).phone;
+  const phone =
+    typeof rawPhone === "string" ? normalizePhone(rawPhone) : null;
+  if (!phone) {
+    return NextResponse.json(
+      { error: "Please enter a valid phone number." },
+      { status: 400 }
+    );
+  }
+
   const { data: order, error: oErr } = await supabase
     .from("orders")
-    .insert({ customer_name: customerName, total })
+    .insert({ customer_name: customerName, phone, total })
     .select()
     .single();
 
@@ -146,7 +156,7 @@ export async function GET(req: NextRequest) {
   const supabase = getServerClient();
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id, created_at, customer_name, total, order_items(*)")
+    .select("id, created_at, customer_name, phone, comment, total, order_items(*)")
     .order("created_at", { ascending: false })
     .limit(200);
 

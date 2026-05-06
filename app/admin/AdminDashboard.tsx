@@ -1,25 +1,75 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import HeaderLogo from "@/components/HeaderLogo";
 import { formatBirr } from "@/lib/format";
 import type { OrderItem } from "@/lib/types";
 
+type FilterMode = "today" | "week" | "month" | "all" | "custom";
+
 type AdminOrder = {
   id: string;
   created_at: string;
   customer_name: string | null;
+  phone: string | null;
+  comment: string | null;
   total: number;
   order_items: OrderItem[];
 };
+
+function isoDay(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const today = () => isoDay(new Date());
+const startOfWeek = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay()); // Sunday
+  return isoDay(d);
+};
+const startOfMonth = () => {
+  const d = new Date();
+  d.setDate(1);
+  return isoDay(d);
+};
+
+function formatRangeLabel(from: string, to: string): string {
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  return from === to ? fmt(from) : `${fmt(from)} – ${fmt(to)}`;
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"today" | "week" | "all">("today");
+  const [mode, setMode] = useState<FilterMode>("today");
+  const [customFrom, setCustomFrom] = useState<string>(today());
+  const [customTo, setCustomTo] = useState<string>(today());
+
+  // Effective range, derived from preset or custom inputs.
+  const { from, to } = useMemo<{ from: string | null; to: string | null }>(
+    () => {
+      switch (mode) {
+        case "today": return { from: today(), to: today() };
+        case "week":  return { from: startOfWeek(), to: today() };
+        case "month": return { from: startOfMonth(), to: today() };
+        case "all":   return { from: null, to: null };
+        case "custom":
+        default:      return { from: customFrom, to: customTo };
+      }
+    },
+    [mode, customFrom, customTo]
+  );
 
   async function load() {
     setError(null);
@@ -42,16 +92,15 @@ export default function AdminDashboard() {
     router.refresh();
   }
 
-  const now = Date.now();
   const filtered = (orders ?? []).filter((o) => {
     const t = new Date(o.created_at).getTime();
-    if (filter === "today") {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      return t >= start.getTime();
-    }
-    if (filter === "week") return t >= now - 7 * 24 * 3600 * 1000;
-    return true;
+    const fromTs = from
+      ? new Date(`${from}T00:00:00`).getTime()
+      : Number.NEGATIVE_INFINITY;
+    const toTs = to
+      ? new Date(`${to}T23:59:59.999`).getTime()
+      : Number.POSITIVE_INFINITY;
+    return t >= fromTs && t <= toTs;
   });
 
   const total = filtered.reduce((s, o) => s + o.total, 0);
@@ -100,18 +149,26 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        {(["today", "week", "all"] as const).map((f) => (
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {(
+          [
+            ["today", "Today"],
+            ["week", "This week"],
+            ["month", "This month"],
+            ["all", "All"],
+            ["custom", "Custom"],
+          ] as const
+        ).map(([m, label]) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={m}
+            onClick={() => setMode(m)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
-              filter === f
+              mode === m
                 ? "bg-brand-500 text-white shadow-pop"
                 : "bg-white/70 text-brand-700 border border-brand-100"
             }`}
           >
-            {f === "today" ? "Today" : f === "week" ? "Last 7 days" : "All"}
+            {label}
           </button>
         ))}
         <button
@@ -121,6 +178,41 @@ export default function AdminDashboard() {
           Refresh
         </button>
       </div>
+
+      {mode === "custom" && (
+        <div className="card p-3 mb-4 grid grid-cols-2 gap-2 animate-fade-up">
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-muted">
+              From
+            </span>
+            <input
+              type="date"
+              className="input mt-1"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-muted">
+              To
+            </span>
+            <input
+              type="date"
+              className="input mt-1"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+
+      {mode !== "custom" && from && to && (
+        <p className="px-1 mb-3 text-[11px] text-ink-muted tabular-nums">
+          {formatRangeLabel(from, to)}
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
@@ -139,6 +231,14 @@ export default function AdminDashboard() {
                   <div className="font-medium text-ink">
                     {o.customer_name || "Walk-in"}
                   </div>
+                  {o.phone && (
+                    <a
+                      href={`tel:${o.phone}`}
+                      className="text-xs text-brand-700 hover:underline tabular-nums"
+                    >
+                      {o.phone}
+                    </a>
+                  )}
                   <div className="text-[11px] text-ink-muted">
                     {new Date(o.created_at).toLocaleString()} · #
                     {o.id.slice(0, 8)}
@@ -166,6 +266,14 @@ export default function AdminDashboard() {
                   </li>
                 ))}
               </ul>
+              {o.comment && (
+                <div className="mt-3 rounded-2xl bg-brand-50 border border-brand-100 px-3 py-2.5 text-sm text-ink-soft">
+                  <div className="text-[10px] uppercase tracking-wider text-brand-600 mb-1">
+                    Customer comment
+                  </div>
+                  <p className="whitespace-pre-line">{o.comment}</p>
+                </div>
+              )}
             </li>
           ))}
         </ul>
