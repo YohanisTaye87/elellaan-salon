@@ -1,0 +1,8 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Netlify's official Next.js runtime — handles SSR pages and /api/* routes.
+# Auto-installs on deploy; listing it here makes the build deterministic.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
