@@ -12,9 +12,12 @@ type Props = {
   services: Service[];
 };
 
+const QTY_MAX = 9;
+
 export default function ServiceSelector({ categories, services }: Props) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // service id -> quantity (1..9). Absent = not selected.
+  const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
   const [customerName, setCustomerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,22 +35,39 @@ export default function ServiceSelector({ categories, services }: Props) {
     return map;
   }, [services]);
 
-  const selectedServices = useMemo(
-    () => services.filter((s) => selected.has(s.id)),
-    [services, selected]
-  );
+  // Detect "Wig" category — those services use a 1..9 stepper instead of a
+  // checkbox so customers can buy multiples at the unit price.
+  const wigCategoryIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of categories) {
+      if (c.name.trim().toLowerCase() === "wig") set.add(c.id);
+    }
+    return set;
+  }, [categories]);
+
+  function isQuantityService(s: Service): boolean {
+    return wigCategoryIds.has(s.category_id);
+  }
+
+  const selectedItems = useMemo(() => {
+    const out: { service: Service; qty: number; subtotal: number }[] = [];
+    for (const s of services) {
+      const q = quantities.get(s.id) ?? 0;
+      if (q > 0) out.push({ service: s, qty: q, subtotal: s.price_min * q });
+    }
+    return out;
+  }, [services, quantities]);
 
   const total = useMemo(
-    () => selectedServices.reduce((sum, s) => sum + s.price_min, 0),
-    [selectedServices]
+    () => selectedItems.reduce((sum, x) => sum + x.subtotal, 0),
+    [selectedItems]
   );
 
   const trimmedName = customerName.trim();
   const nameValid = trimmedName.length >= 2;
-  const canSubmit = selected.size > 0 && nameValid && !submitting;
+  const canSubmit = selectedItems.length > 0 && nameValid && !submitting;
 
-  // Measure the sticky bottom panel so the page content always clears it,
-  // regardless of how many items are selected or whether the error is shown.
+  // Measure the sticky bottom panel so the page content always clears it.
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState(180);
   useEffect(() => {
@@ -60,12 +80,19 @@ export default function ServiceSelector({ categories, services }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+  function setQty(id: string, n: number) {
+    setQuantities((prev) => {
+      const next = new Map(prev);
+      const clamped = Math.max(0, Math.min(QTY_MAX, n));
+      if (clamped <= 0) next.delete(id);
+      else next.set(id, clamped);
       return next;
     });
+  }
+
+  function toggle(id: string) {
+    const cur = quantities.get(id) ?? 0;
+    setQty(id, cur > 0 ? 0 : 1);
   }
 
   async function submit() {
@@ -81,7 +108,10 @@ export default function ServiceSelector({ categories, services }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer_name: trimmedName,
-          service_ids: Array.from(selected),
+          items: selectedItems.map((x) => ({
+            service_id: x.service.id,
+            quantity: x.qty,
+          })),
         }),
       });
       if (!res.ok) {
@@ -166,37 +196,23 @@ export default function ServiceSelector({ categories, services }: Props) {
                 {cat.name}
               </h2>
               <ul className="card divide-y divide-brand-100 overflow-hidden">
-                {items.map((s) => {
-                  const checked = selected.has(s.id);
-                  return (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => toggle(s.id)}
-                        data-checked={checked}
-                        className="row-button w-full flex items-center gap-3 px-4 py-3.5 hover:bg-brand-50 text-left"
-                      >
-                        <span
-                          className={`tick ${checked ? "animate-tick-pop" : ""}`}
-                          data-checked={checked}
-                        >
-                          <CheckIcon />
-                        </span>
-                        <span className="flex-1">
-                          <span className="block font-medium text-ink">{s.name}</span>
-                          <span className="block text-sm text-ink-muted">
-                            {formatPriceRange(s.price_min, s.price_max)}
-                            {s.price_max != null && (
-                              <span className="ml-1 text-[11px] text-brand-500">
-                                (varies)
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {items.map((s) =>
+                  isQuantityService(s) ? (
+                    <QtyRow
+                      key={s.id}
+                      service={s}
+                      qty={quantities.get(s.id) ?? 0}
+                      onChange={(n) => setQty(s.id, n)}
+                    />
+                  ) : (
+                    <CheckRow
+                      key={s.id}
+                      service={s}
+                      checked={(quantities.get(s.id) ?? 0) > 0}
+                      onToggle={() => toggle(s.id)}
+                    />
+                  )
+                )}
               </ul>
             </section>
           );
@@ -210,17 +226,22 @@ export default function ServiceSelector({ categories, services }: Props) {
             ref={panelRef}
             className="glass rounded-apple px-4 py-3 mb-3 animate-scale-in"
           >
-            {selected.size > 0 && (
+            {selectedItems.length > 0 && (
               <div className="mb-3 max-h-32 overflow-y-auto pr-1">
                 <ul className="space-y-1">
-                  {selectedServices.map((s) => (
+                  {selectedItems.map((x) => (
                     <li
-                      key={s.id}
+                      key={x.service.id}
                       className="flex justify-between text-sm text-ink-soft animate-fade-up"
                     >
-                      <span className="truncate pr-2">{s.name}</span>
+                      <span className="truncate pr-2">
+                        {x.service.name}
+                        {x.qty > 1 && (
+                          <span className="text-brand-500"> × {x.qty}</span>
+                        )}
+                      </span>
                       <span className="tabular-nums text-ink">
-                        {formatBirr(s.price_min)}
+                        {formatBirr(x.subtotal)}
                       </span>
                     </li>
                   ))}
@@ -254,9 +275,11 @@ export default function ServiceSelector({ categories, services }: Props) {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-ink-muted">
-                  {selected.size === 0
+                  {selectedItems.length === 0
                     ? "No services yet"
-                    : `${selected.size} service${selected.size > 1 ? "s" : ""}`}
+                    : `${selectedItems.length} service${
+                        selectedItems.length > 1 ? "s" : ""
+                      }`}
                 </div>
                 <div className="text-2xl font-semibold tabular-nums text-ink">
                   {formatBirr(total)}
@@ -284,5 +307,148 @@ export default function ServiceSelector({ categories, services }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------- row variants ----------
+
+function CheckRow({
+  service,
+  checked,
+  onToggle,
+}: {
+  service: Service;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        data-checked={checked}
+        className="row-button w-full flex items-center gap-3 px-4 py-3.5 hover:bg-brand-50 text-left"
+      >
+        <span
+          className={`tick ${checked ? "animate-tick-pop" : ""}`}
+          data-checked={checked}
+        >
+          <CheckIcon />
+        </span>
+        <span className="flex-1">
+          <span className="block font-medium text-ink">{service.name}</span>
+          <span className="block text-sm text-ink-muted">
+            {formatPriceRange(service.price_min, service.price_max)}
+            {service.price_max != null && (
+              <span className="ml-1 text-[11px] text-brand-500">(varies)</span>
+            )}
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function QtyRow({
+  service,
+  qty,
+  onChange,
+}: {
+  service: Service;
+  qty: number;
+  onChange: (n: number) => void;
+}) {
+  const active = qty > 0;
+  const subtotal = service.price_min * qty;
+  return (
+    <li
+      className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${
+        active ? "bg-brand-50" : "hover:bg-brand-50/50"
+      }`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-ink truncate">{service.name}</div>
+        <div className="text-sm text-ink-muted tabular-nums">
+          {formatPriceRange(service.price_min, service.price_max)} each
+          {qty > 1 && (
+            <span className="ml-2 text-brand-700 font-medium">
+              · {formatBirr(subtotal)}
+            </span>
+          )}
+        </div>
+      </div>
+      <Stepper value={qty} onChange={onChange} />
+    </li>
+  );
+}
+
+function Stepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  if (value === 0) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(1)}
+        aria-label="Add"
+        className="tap-bounce h-9 w-9 rounded-full bg-white border border-brand-200 text-brand-700 flex items-center justify-center hover:bg-brand-100"
+      >
+        <PlusIcon />
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center bg-white rounded-full border border-brand-200 shadow-card overflow-hidden animate-scale-in">
+      <button
+        type="button"
+        onClick={() => onChange(value - 1)}
+        aria-label="Decrease"
+        className="tap-bounce h-9 w-9 flex items-center justify-center text-brand-700 hover:bg-brand-100"
+      >
+        <MinusIcon />
+      </button>
+      <span className="w-7 text-center font-semibold tabular-nums text-ink">
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        disabled={value >= QTY_MAX}
+        aria-label="Increase"
+        className="tap-bounce h-9 w-9 flex items-center justify-center text-brand-700 hover:bg-brand-100 disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <PlusIcon />
+      </button>
+    </div>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
