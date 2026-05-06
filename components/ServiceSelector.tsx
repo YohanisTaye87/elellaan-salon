@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Category, Service } from "@/lib/types";
 import { formatBirr, formatPriceRange } from "@/lib/format";
 import CheckIcon from "./CheckIcon";
+import HistorySheet from "./HistorySheet";
 
 type Props = {
   categories: Category[];
@@ -18,6 +19,7 @@ export default function ServiceSelector({ categories, services }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touchedName, setTouchedName] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeCat, setActiveCat] = useState<string>(categories[0]?.id ?? "");
 
   const servicesByCat = useMemo(() => {
@@ -96,6 +98,33 @@ export default function ServiceSelector({ categories, services }: Props) {
 
   return (
     <div style={{ paddingBottom: panelHeight + 24 }}>
+      {/* Floating right-edge History tab */}
+      <button
+        onClick={() => setHistoryOpen(true)}
+        aria-label="View your visit history"
+        className="fixed top-4 right-4 z-30 tap-bounce flex items-center gap-1.5
+                   rounded-full bg-white/85 backdrop-blur-xl border border-brand-100
+                   px-3.5 py-2 text-sm font-medium text-brand-700 shadow-card
+                   hover:bg-white hover:shadow-pop transition-all"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+          <path
+            d="M12 7v5l3 2"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+          />
+        </svg>
+        History
+      </button>
+
+      <HistorySheet
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        prefillName={trimmedName}
+      />
+
       {/* Category pills (sticky) */}
       <div className="sticky top-0 z-20 -mx-4 px-4 py-3 glass">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">

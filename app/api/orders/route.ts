@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase";
 import { isAdminRequest } from "@/lib/auth";
+import { normalizeCustomerName } from "@/lib/normalize";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +36,8 @@ export async function POST(req: NextRequest) {
 
   const total = services.reduce((s, x) => s + x.price_min, 0);
   const customerName =
-    typeof body.customer_name === "string" && body.customer_name.trim().length > 0
-      ? body.customer_name.trim().slice(0, 60)
+    typeof body.customer_name === "string"
+      ? normalizeCustomerName(body.customer_name).displayName || null
       : null;
 
   const { data: order, error: oErr } = await supabase
