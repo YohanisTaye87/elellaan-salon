@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { Category, Service } from "@/lib/types";
 import { formatBirr, formatPriceRange } from "@/lib/format";
 import { isPhoneValid } from "@/lib/normalize";
-import CheckIcon from "./CheckIcon";
 import HistorySheet from "./HistorySheet";
 
 type Props = {
@@ -37,20 +36,6 @@ export default function ServiceSelector({ categories, services }: Props) {
     }
     return map;
   }, [services]);
-
-  // Detect "Wig" category — those services use a 1..9 stepper instead of a
-  // checkbox so customers can buy multiples at the unit price.
-  const wigCategoryIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of categories) {
-      if (c.name.trim().toLowerCase() === "wig") set.add(c.id);
-    }
-    return set;
-  }, [categories]);
-
-  function isQuantityService(s: Service): boolean {
-    return wigCategoryIds.has(s.category_id);
-  }
 
   const selectedItems = useMemo(() => {
     const out: { service: Service; qty: number; subtotal: number }[] = [];
@@ -93,11 +78,6 @@ export default function ServiceSelector({ categories, services }: Props) {
       else next.set(id, clamped);
       return next;
     });
-  }
-
-  function toggle(id: string) {
-    const cur = quantities.get(id) ?? 0;
-    setQty(id, cur > 0 ? 0 : 1);
   }
 
   async function submit() {
@@ -203,23 +183,14 @@ export default function ServiceSelector({ categories, services }: Props) {
                 {cat.name}
               </h2>
               <ul className="card divide-y divide-brand-100 overflow-hidden">
-                {items.map((s) =>
-                  isQuantityService(s) ? (
-                    <QtyRow
-                      key={s.id}
-                      service={s}
-                      qty={quantities.get(s.id) ?? 0}
-                      onChange={(n) => setQty(s.id, n)}
-                    />
-                  ) : (
-                    <CheckRow
-                      key={s.id}
-                      service={s}
-                      checked={(quantities.get(s.id) ?? 0) > 0}
-                      onToggle={() => toggle(s.id)}
-                    />
-                  )
-                )}
+                {items.map((s) => (
+                  <QtyRow
+                    key={s.id}
+                    service={s}
+                    qty={quantities.get(s.id) ?? 0}
+                    onChange={(n) => setQty(s.id, n)}
+                  />
+                ))}
               </ul>
             </section>
           );
@@ -340,45 +311,6 @@ export default function ServiceSelector({ categories, services }: Props) {
         </div>
       </div>
     </div>
-  );
-}
-
-// ---------- row variants ----------
-
-function CheckRow({
-  service,
-  checked,
-  onToggle,
-}: {
-  service: Service;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onToggle}
-        data-checked={checked}
-        className="row-button w-full flex items-center gap-3 px-4 py-3.5 hover:bg-brand-50 text-left"
-      >
-        <span
-          className={`tick ${checked ? "animate-tick-pop" : ""}`}
-          data-checked={checked}
-        >
-          <CheckIcon />
-        </span>
-        <span className="flex-1">
-          <span className="block font-medium text-ink">{service.name}</span>
-          <span className="block text-sm text-ink-muted">
-            {formatPriceRange(service.price_min, service.price_max)}
-            {service.price_max != null && (
-              <span className="ml-1 text-[11px] text-brand-500">(varies)</span>
-            )}
-          </span>
-        </span>
-      </button>
-    </li>
   );
 }
 

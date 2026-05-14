@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import HeaderLogo from "@/components/HeaderLogo";
+import OrderEditor from "@/components/OrderEditor";
 import { formatBirr } from "@/lib/format";
 import type { OrderItem } from "@/lib/types";
 
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
   const [mode, setMode] = useState<FilterMode>("today");
   const [customFrom, setCustomFrom] = useState<string>(today());
   const [customTo, setCustomTo] = useState<string>(today());
+  const [editing, setEditing] = useState<AdminOrder | null>(null);
 
   // Effective range, derived from preset or custom inputs.
   const { from, to } = useMemo<{ from: string | null; to: string | null }>(
@@ -244,8 +246,16 @@ export default function AdminDashboard() {
                     {o.id.slice(0, 8)}
                   </div>
                 </div>
-                <div className="text-xl font-semibold tabular-nums text-brand-700">
-                  {formatBirr(o.total)}
+                <div className="flex flex-col items-end gap-1">
+                  <div className="text-xl font-semibold tabular-nums text-brand-700">
+                    {formatBirr(o.total)}
+                  </div>
+                  <button
+                    onClick={() => setEditing(o)}
+                    className="tap-bounce text-xs font-medium text-brand-700 rounded-full px-3 py-1 bg-white border border-brand-100 hover:bg-brand-50"
+                  >
+                    Edit
+                  </button>
                 </div>
               </div>
               <ul className="divide-y divide-brand-100">
@@ -278,6 +288,19 @@ export default function AdminDashboard() {
           ))}
         </ul>
       )}
+
+      <OrderEditor
+        order={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          void load();
+        }}
+        onDeleted={() => {
+          setEditing(null);
+          void load();
+        }}
+      />
     </main>
   );
 }
